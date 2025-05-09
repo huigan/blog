@@ -42,7 +42,7 @@ wsl -d Ubuntu
 >这样C盘就不会再被占用大量磁盘空间了。
 
 #   二、wsl中安装环境
-## **1、ubuntu系统安装solana环境**
+## 1、ubuntu系统安装solana环境
 下面的命令可以一键安装solana环境，此处会安装rust、solana cli、anchor cli、nvm 、nodejs、yarn，时间会比较长，
  ```shell
 curl --proto '=https' --tlsv1.2 -sSfL https://raw.githubusercontent.com/solana-developers/solana-install/main/install.sh | bash
@@ -59,7 +59,7 @@ curl --proto '=https' --tlsv1.2 -sSfL https://raw.githubusercontent.com/solana-d
 > wsl --shutdown
 > ```
 
-## **2、配置全局变量**
+## 2、配置全局变量
 安装完成后记得将solana加到PATH变量，不然下次进入Ubuntu提示不识别solana命令。
 xxx替换为您的当前系统用户名。
 
@@ -67,7 +67,7 @@ xxx替换为您的当前系统用户名。
 echo 'PATH="/home/xxx/.local/share/solana/install/active_release/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
-## **3、查看是否成功**
+## 3、查看是否成功
 配置完成后可以运行下面的命令查看是否成功：
 ```shell
 rustc --version
@@ -81,7 +81,7 @@ anchor --version
 
 # 三、VS Code 中开发solana合约
 
-## **1、安装远程扩展包**
+## 1、安装远程扩展包
 Visual Studio Code支持WSL连接，并直接修改linux/ubuntu中的文件，不过需要安装一个扩展包。
 [Remote Development - Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.vscode-remote-extensionpack "        Remote Development - Visual Studio Marketplace    ")
 
@@ -90,7 +90,7 @@ Visual Studio Code支持WSL连接，并直接修改linux/ubuntu中的文件，�
 
 ![image.png](https://img.learnblockchain.cn/attachments/2025/04/igK5ZqcO680b482adc305.png)
 
-## **2、anchor初始化项目**
+## 2、anchor初始化项目
 运行以下命令，初始化一个名字为 counter的solana项目，名字可以随意。
 ```shell
 anchor init counter
@@ -101,7 +101,7 @@ vs code中打开counter，可以看到以下目录：
 
 合约代码存放在 /programs/counter/src/lib.rs 文件中，后续主要在此文件进中行开发。
 
-## **3、启动一个本地节点**
+## 3、启动一个本地节点
 切换到本地环境
 ```shell
 solana config set --url localhost
@@ -120,7 +120,7 @@ solana-test-validator
 
 ![image.png](https://img.learnblockchain.cn/attachments/2025/04/28CNGxSD680b4ff062954.png)
 
-## **4、创建一个钱包**
+## 4、创建一个钱包
 使 Solana CLI 发送一些交易，我们需要创建一个solana钱包，在根目录中的Anchor.toml文件中可以看到 wallet = "~/.config/solana/id.json" ，此路径为默认密钥对路径，所以我们也直接在此生成。
 运行以下命令：
 
@@ -146,7 +146,7 @@ solana balance
  ```
 
 
-## **5、编译与测试**
+## 5、编译与测试
 /programs 目录中为合约代码目录。
 在vs code中打开一个终端，可以看到vs code默认打开的就是wsl子系统中对应的counter目录。
 counter目录下运行编译命令：
