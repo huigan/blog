@@ -41,8 +41,8 @@ idl-build = [
     "anchor-lang/idl-build",
     "anchor-spl/idl-build",
 ]
-
-    [dependencies]
+ 
+[dependencies]
 anchor-lang = "0.31.1"
 anchor-spl = "0.31.1"
 
@@ -375,7 +375,230 @@ pub struct TokenMetadataArgs {
 > 和以太坊的代币不同，以太坊中一般都是在初始化方法中指定代币的总量，solana中并不存在部署合约后并初始化的方法，可以在部署合约后访问指定的方法来模拟初始化操作。
 
 #### 什么是关联Token账户 ATA ？
-另外一个和以太坊不同的地方是，solidity可以通过map(address=>uint256)结构，直接记录用户地址的余额。但是solana的需要一个单独的代币账户来保存余额，相当于每个用户钱包在每个代币中都会有另外一个单独的账户来保存余额等信息，这个账户可以是任意创建的账户，但是为了方便查找等操作，solana中每个用户钱包在每个代币中会有一个默认且唯一的代币账户来保存相关信息，这个账户称为`关联代币账户` （`Associated Token Account 简称：ATA`）。
+另外一个和以太坊不同的地方是，solidity可以通过map(address=>uint256)结构，直接记录用户地址的余额。但是solana的账户模型设计是需要一个单独的代币账户来保存余额，相当于每个用户钱包在每个代币中都会有另外一个单独的账户来保存余额等信息，这个账户可以是任意创建的账户，但是为了方便查找等操作，solana中每个用户钱包在每个代币中会有一个默认且唯一的代币账户来保存相关信息，这个账户称为`关联代币账户` （`Associated Token Account 简称：ATA`）。
 
 ATA是一个PDA账户，由`用户账户地址`、`代币mint地址`和`代币程序地址`组成种子，由`ATA 程序`生成。
+
+
+```js
+//ts前端测试文件中创建ATA账户
+const ata = getAssociatedTokenAddress(
+        mint.publicKey,//代币mint账户地址
+        wallet.publicKey,//用户钱包地址
+        false,//是否允许不在曲线上，一般来说用户钱包通常是false，pda账户则是true
+        TOKEN_2022_PROGRAM_ID // 代币程序地址，这里我们使用Token Program 2022
+);
+```
+现在我们在之前的程序中为默认钱包创建一个ATA账户，并mint一定数量的代币，使用此ATA账户来接收。
+
+
+```js
+use anchor_lang::prelude::*;
+use anchor_spl::associated_token::AssociatedToken;
+use anchor_lang::solana_program::rent::{
+    DEFAULT_EXEMPTION_THRESHOLD, DEFAULT_LAMPORTS_PER_BYTE_YEAR,
+};
+use anchor_lang::system_program::{transfer, Transfer};
+use anchor_spl::token_interface::{
+    self,token_metadata_initialize, Mint,MintTo, Token2022, TokenMetadataInitialize,TokenInterface,TokenAccount,
+};
+use spl_token_metadata_interface::state::TokenMetadata;
+use spl_type_length_value::variable_len_pack::VariableLenPack;
+ 
+declare_id!("2pNAGP3UHPrEFQ9q46DTNofA9xGesMjV231aTxCuTjw2");
+ 
+#[program]
+pub mod create_token {
+    use super::*;
+ 
+    pub fn create_mint(ctx: Context<CreateMint>, args: TokenMetadataArgs) -> Result<()> {
+        let TokenMetadataArgs { name, symbol, uri } = args;
+
+        // Define token metadata
+        let token_metadata = TokenMetadata {
+            name: name.clone(),
+            symbol: symbol.clone(),
+            uri: uri.clone(),
+            ..Default::default()
+        };
+
+        // Add 4 extra bytes for size of MetadataExtension (2 bytes for type, 2 bytes for length)
+        let data_len = 4 + token_metadata.get_packed_len()?;
+
+        // Calculate lamports required for the additional metadata
+        let lamports =
+            data_len as u64 * DEFAULT_LAMPORTS_PER_BYTE_YEAR * DEFAULT_EXEMPTION_THRESHOLD as u64;
+
+        // Transfer additional lamports to mint account
+        transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.payer.to_account_info(),
+                    to: ctx.accounts.mint_account.to_account_info(),
+                },
+            ),
+            lamports,
+        )?;
+
+        // Initialize token metadata
+        token_metadata_initialize(
+            CpiContext::new(
+                ctx.accounts.token_program.to_account_info(),
+                TokenMetadataInitialize {
+                    program_id: ctx.accounts.token_program.to_account_info(),
+                    mint: ctx.accounts.mint_account.to_account_info(),
+                    metadata: ctx.accounts.mint_account.to_account_info(),
+                    mint_authority: ctx.accounts.payer.to_account_info(),
+                    update_authority: ctx.accounts.payer.to_account_info(),
+                },
+            ),
+            name,
+            symbol,
+            uri,
+        )?;
+        Ok(())
+    }
+
+    //新增铸造方法
+    pub fn mint_token(ctx: Context<MintToken>, amount: u64) -> Result<()> {
+        let cpi_accounts = MintTo {
+            mint: ctx.accounts.mint.to_account_info().clone(),
+            to: ctx.accounts.signer_ata.to_account_info().clone(),
+            authority: ctx.accounts.signer.to_account_info(),
+        };
+        let cpi_program = ctx.accounts.token_program.to_account_info();
+        let cpi_context = CpiContext::new(cpi_program, cpi_accounts);
+        token_interface::mint_to(cpi_context, amount)?;
+        msg!("Mint Token");
+        Ok(())
+    }
+}
+ 
+
+#[derive(Accounts)]
+pub struct CreateMint<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+
+    #[account(
+        init,
+        payer = payer,
+        mint::decimals = 2,
+        mint::authority = payer,
+        extensions::metadata_pointer::authority = payer,
+        extensions::metadata_pointer::metadata_address = mint_account,
+    )]
+    pub mint_account: InterfaceAccount<'info, Mint>,
+    pub token_program: Program<'info, Token2022>,
+    pub system_program: Program<'info, System>,
+}
+
+
+#[derive(AnchorDeserialize, AnchorSerialize)]
+pub struct TokenMetadataArgs {
+    pub name: String,
+    pub symbol: String,
+    pub uri: String,
+}
+
+ //新增铸造方法上下文结构体
+#[derive(Accounts)]
+pub struct MintToken<'info> {
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    #[account(mut)]
+    pub mint: InterfaceAccount<'info, Mint>,
+    #[account(
+        init,
+        payer = signer,
+        associated_token::mint = mint,
+        associated_token::authority = signer,
+    )]
+    pub signer_ata: InterfaceAccount<'info, TokenAccount>,
+    pub token_program: Interface<'info, TokenInterface>,
+
+    pub system_program: Program<'info, System>,
+    pub associated_token_program: Program<'info, AssociatedToken>,
+}
+```
+在新增的铸造方法的上下文结构体中我们用 账户约束 定义一个ATA账户，由这个账户来接收铸造出来的代币。我们需要通过CPI调用代币程序的 `mint_to` 方法来完成铸造。
+
+测试代码：
+
+```js
+import * as anchor from "@coral-xyz/anchor";
+import { Program } from "@coral-xyz/anchor";
+import { CreateToken } from "../target/types/create_token";
+import { 
+  TOKEN_2022_PROGRAM_ID, 
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddress 
+} from "@solana/spl-token";
+import { 
+  PublicKey, 
+  Keypair, 
+  SystemProgram, 
+  LAMPORTS_PER_SOL 
+} from "@solana/web3.js";
+ 
+describe("token-example", () => {
+  const provider = anchor.AnchorProvider.env();
+  anchor.setProvider(provider);
+ 
+  const program = anchor.workspace.CreateToken as Program<CreateToken>;
+  const mint = Keypair.generate();
+
+  const wallet = provider.wallet as anchor.Wallet;
+  
+  
+  const metadata = {
+    name: 'my token',
+    symbol: 'mt',
+    uri: 'https://raw.githubusercontent.com/solana-developers/opos-asset/main/assets/DeveloperPortal/metadata.json',
+  };
+ 
+  it("Is initialized!", async () => {
+    const tx = await program.methods
+      .createMint(metadata)
+      .accounts({
+        payer: provider.wallet.publicKey,
+        mintAccount: mint.publicKey,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+        systemProgram: SystemProgram.programId,
+      })
+      .signers([mint])
+      .rpc({ commitment: "confirmed" });
+    
+    console.log("Your transaction signature", tx);
+    console.log("mintAccount", mint.publicKey);
+  });
+
+  it("Mint Token!", async () => {
+      const ata = await getAssociatedTokenAddress(
+        mint.publicKey,
+        wallet.publicKey,
+        false,
+        TOKEN_2022_PROGRAM_ID
+      );
+
+      const amount = new anchor.BN(50000000);
+
+      const tx = await program.methods
+      .mintToken(amount)
+      .accounts({
+        mint: mint.publicKey,
+        signerAta: ata,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+      })
+      .rpc();
+
+    console.log("Mint Token! Transaction signature:", tx);
+  });
+
+  
+});
+```
+运行后可以看到我们成功创建了 `signerAta` ATA账户，并铸造了50万代币给到这个账户。
+
 
