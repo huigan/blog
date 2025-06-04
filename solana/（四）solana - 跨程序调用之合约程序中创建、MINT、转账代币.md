@@ -54,34 +54,34 @@ anchor-spl = "0.31.1"
 use anchor_lang::prelude::*;
 //引入anchor-spl的token_interface模块
 use anchor_spl::token_interface::{Mint, TokenInterface};
-
+ 
 declare_id!("2pNAGP3UHPrEFQ9q46DTNofA9xGesMjV231aTxCuTjw2");
-
+ 
 #[program]
 pub mod create_token {
     use super::*;
-
+ 
     pub fn create_mint(ctx: Context<CreateMint>) -> Result<()> {
         msg!("Created Mint Account: {:?}", ctx.accounts.mint.key());
         Ok(())
+    }
 }
-}
-
+ 
 #[derive(Accounts)]
 pub struct CreateMint<'info> {
-#[account(mut)]
-pub signer: Signer<'info>,
-//此处通过账户约束来定义mint账户
-#[account(
-    init,
-    payer = signer,
-    mint::decimals = 6, //定义代币的小数位
-    mint::authority = signer.key(), //定义代币的铸造权限地址，此处我们设置为signer
-    mint::freeze_authority = signer.key(), //定义代币的冻结权限地址，此处我们设置为signer
-)]
-pub mint: InterfaceAccount<'info, Mint>,
-pub token_program: Interface<'info, TokenInterface>,
-pub system_program: Program<'info, System>,
+    #[account(mut)]
+    pub signer: Signer<'info>,
+    //此处通过账户约束来定义mint账户
+    #[account(
+        init,
+        payer = signer,
+        mint::decimals = 6, //定义代币的小数位
+        mint::authority = signer.key(), //定义代币的铸造权限地址，此处我们设置为signer
+        mint::freeze_authority = signer.key(), //定义代币的冻结权限地址，此处我们设置为signer
+    )]
+    pub mint: InterfaceAccount<'info, Mint>,
+    pub token_program: Interface<'info, TokenInterface>,
+    pub system_program: Program<'info, System>,
 }
 
 ```
@@ -99,33 +99,33 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { CreateToken } from "../target/types/create_token";
 import { TOKEN_2022_PROGRAM_ID, getMint } from "@solana/spl-token";
-
+ 
 describe("token-example", () => {
-    anchor.setProvider(anchor.AnchorProvider.env());
-
-    const program = anchor.workspace.CreateToken as Program<CreateToken>;
-    const mint = anchor.web3.Keypair.generate();
-
-    it("Is initialized!", async () => {
-        const tx = await program.methods
-            .createMint()
-            .accounts({
-                mint: mint.publicKey,
-                tokenProgram: TOKEN_2022_PROGRAM_ID,
-            })
-            .signers([mint])
-            .rpc({ commitment: "confirmed" });
-        console.log("Your transaction signature", tx);
-
-        const mintAccount = await getMint(
-            program.provider.connection,
-            mint.publicKey,
-            "confirmed",
-            TOKEN_2022_PROGRAM_ID,
-        );
-
-        console.log("Mint Account", mintAccount);
-    });
+  anchor.setProvider(anchor.AnchorProvider.env());
+ 
+  const program = anchor.workspace.CreateToken as Program<CreateToken>;
+  const mint = anchor.web3.Keypair.generate();
+ 
+  it("Is initialized!", async () => {
+    const tx = await program.methods
+      .createMint()
+      .accounts({
+        mint: mint.publicKey,
+        tokenProgram: TOKEN_2022_PROGRAM_ID,
+      })
+      .signers([mint])
+      .rpc({ commitment: "confirmed" });
+    console.log("Your transaction signature", tx);
+ 
+    const mintAccount = await getMint(
+      program.provider.connection,
+      mint.publicKey,
+      "confirmed",
+      TOKEN_2022_PROGRAM_ID,
+    );
+ 
+    console.log("Mint Account", mintAccount);
+  });
 });
 ```
 anchor中启动本地节点：
@@ -884,8 +884,15 @@ describe("token-example", () => {
   
 });
 ```
+
 我们新创建一个 recipient 账号，并计算出对应的ATA账户。运行测试代码，可以看到成功转移10万代币。
 
+```js
+//构建
+anchor build
+//运行测试代码
+anchor test
+```
 
 ### 总结
 
